@@ -14,7 +14,7 @@ import numpy as np
 import scipy
 import numpy.random as rng
 from sklearn.utils import shuffle
-from sklearn.cross_validation import train_test_split
+from sklearn.model_selection import train_test_split
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -37,9 +37,9 @@ args = parser.parse_args()
 if args.phase=='train':
 	train_folder = input("Enter training data folder: ")
 	model_folder = input("Enter folder to save model: ")
-	train_img=os.path.join(train_folder,"data")
-	train_gt=os.path.join(train_folder,"g_truth")
-	mask_gt=os.path.join(train_folder,"mask_gt")
+	train_img=os.path.join(train_folder,"data_used")
+	train_gt=os.path.join(train_folder,"gTruth")
+	mask_gt=os.path.join(train_folder,"Mask_gt")
 	val_sample=os.path.join(model_folder,"Val_sample")
 	plot=os.path.join(model_folder,"Plot")
 	model_weights=os.path.join(model_folder,"Weights")
@@ -125,7 +125,7 @@ def Encoder(input_img):
 	Econv3_2 = BatchNormalization()(Econv3_2)
 	pool3 = MaxPooling2D(pool_size=(2, 2),strides=(2,2), padding='same', name = "block3_pool1")(Econv3_2)
 
-	encoded = Model(input = input_img, output = [pool3, Econv1_2, Econv2_2, Econv3_2] )
+	encoded = Model(inputs = input_img, outputs = [pool3, Econv1_2, Econv2_2, Econv3_2] )
 
 	return encoded
 
@@ -269,7 +269,8 @@ def Decoder(inp ):
 
 	up1 = Conv2DTranspose(128,(3,3),strides = (2,2), activation = 'relu', padding = 'same', name = "upsample_1")(inp[0])
 	up1 = BatchNormalization()(up1)
-	up1 = merge([up1, inp[3]], mode='concat', concat_axis=3, name = "merge_1")
+	# up1 = merge([up1, inp[3]], mode='concat', concat_axis=3, name = "merge_1") #testing
+	up1 = tf.concat([up1, inp[3]], axis=3, name = "merge_1") #testing
 	Upconv1_1 = Conv2D(128, (3, 3), activation='relu', padding='same', name = "Upconv1_1")(up1)
 	Upconv1_1 = BatchNormalization()(Upconv1_1)
 	Upconv1_2 = Conv2D(128, (3, 3), activation='relu', padding='same', name = "Upconv1_2")(Upconv1_1)
@@ -277,7 +278,8 @@ def Decoder(inp ):
 
 	up2 = Conv2DTranspose(64,(3,3),strides = (2,2), activation = 'relu', padding = 'same', name = "upsample_2")(Upconv1_2)
 	up2 = BatchNormalization()(up2)
-	up2 = merge([up2, inp[2]], mode='concat', concat_axis=3, name = "merge_2")
+	# up2 = merge([up2, inp[2]], mode='concat', concat_axis=3, name = "merge_2") #testing
+	up2 = tf.concat([up2, inp[2]], axis=3, name = "merge_2") #testing
 	Upconv2_1 = Conv2D(64, (3, 3), activation='relu', padding='same', name = "Upconv2_1")(up2)
 	Upconv2_1 = BatchNormalization()(Upconv2_1)
 	Upconv2_2 = Conv2D(64, (3, 3), activation='relu', padding='same', name = "Upconv2_2")(Upconv2_1)
@@ -285,45 +287,47 @@ def Decoder(inp ):
 	
 	up3 = Conv2DTranspose(16,(3,3),strides = (2,2), activation = 'relu', padding = 'same', name = "upsample_3")(Upconv2_2)
 	up3 = BatchNormalization()(up3)
-	up3 = merge([up3, inp[1]], mode='concat', concat_axis=3, name = "merge_3")
+	# up3 = merge([up3, inp[1]], mode='concat', concat_axis=3, name = "merge_3") #testing
+	up3 = tf.concat([up3, inp[1]], axis=3, name = "merge_3") #testing
 	Upconv3_1 = Conv2D(16, (3, 3), activation='relu', padding='same', name = "Upconv3_1")(up3)
 	Upconv3_1 = BatchNormalization()(Upconv3_1)
 	Upconv3_2 = Conv2D(16, (3, 3), activation='relu', padding='same', name = "Upconv3_2")(Upconv3_1)
 	Upconv3_2 = BatchNormalization()(Upconv3_2)
 	   
 	decoded = Conv2D(1, (3, 3), activation='sigmoid', padding='same', name = "decoded")(Upconv3_2)
-	convnet = Model(input = inp, output =  decoded, name = "Mask_output")
+	convnet = Model(inputs = inp, outputs =  decoded, name = "Mask_output")
 	return convnet
 
 
 ###########################################  Regressor  ####################################################
 def Regressor(input_img, decoded):
-	merg1 = merge([input_img, decoded], mode='concat', concat_axis=3, name = "merge_r1")
-	reg_conv1_1 = Conv2D(16, (3, 3), activation='relu', padding='same', name = "block1_conv1")(merg1)
-	reg_conv1_1 = BatchNormalization()(reg_conv1_1)
-	reg_conv1_2 = Conv2D(16, (3, 3), activation='relu', padding='same',  name = "block1_conv2")(reg_conv1_1)
-	reg_conv1_2 = BatchNormalization()(reg_conv1_2)
-	reg_pool1 = MaxPooling2D(pool_size=(2, 2),strides=(2,2),padding='same', name = "block1_pool1")(reg_conv1_2)
-	
-	reg_conv2_1 = Conv2D(64, (3, 3), activation='relu', padding='same', name = "block2_conv1")(reg_pool1)
-	reg_conv2_1 = BatchNormalization()(reg_conv2_1)
-	reg_conv2_2 = Conv2D(64, (3, 3), activation='relu', padding='same', name = "block2_conv2")(reg_conv2_1)
-	reg_conv2_2 = BatchNormalization()(reg_conv2_2)
-	reg_pool2= MaxPooling2D(pool_size=(2, 2),strides=(2,2), padding='same', name = "block2_pool1")(reg_conv2_2)
+  # merg1 = merge([input_img, decoded], mode='concat', concat_axis=3, name = "merge_r1") #testing
+  merg1 = tf.concat([input_img, decoded], axis=3, name = "merge_r1") #testing
+  reg_conv1_1 = Conv2D(16, (3, 3), activation='relu', padding='same', name = "block1_conv1")(merg1)
+  reg_conv1_1 = BatchNormalization()(reg_conv1_1)
+  reg_conv1_2 = Conv2D(16, (3, 3), activation='relu', padding='same',  name = "block1_conv2")(reg_conv1_1)
+  reg_conv1_2 = BatchNormalization()(reg_conv1_2)
+  reg_pool1 = MaxPooling2D(pool_size=(2, 2),strides=(2,2),padding='same', name = "block1_pool1")(reg_conv1_2)
 
-	reg_conv3_1 = Conv2D(128, (3, 3), activation='relu', padding='same', name = "block3_conv1")(reg_pool2)
-	reg_conv3_1 = BatchNormalization()(reg_conv3_1)
-	reg_conv3_2 = Conv2D(128, (3, 3), activation='relu', padding='same', name = "block3_conv2")(reg_conv3_1)
-	reg_conv3_2 = BatchNormalization()(reg_conv3_2)
-	reg_pool3 = MaxPooling2D(pool_size=(2, 2),strides=(2,2), padding='same', name = "block3_pool1")(reg_conv3_2)
+  reg_conv2_1 = Conv2D(64, (3, 3), activation='relu', padding='same', name = "block2_conv1")(reg_pool1)
+  reg_conv2_1 = BatchNormalization()(reg_conv2_1)
+  reg_conv2_2 = Conv2D(64, (3, 3), activation='relu', padding='same', name = "block2_conv2")(reg_conv2_1)
+  reg_conv2_2 = BatchNormalization()(reg_conv2_2)
+  reg_pool2= MaxPooling2D(pool_size=(2, 2),strides=(2,2), padding='same', name = "block2_pool1")(reg_conv2_2)
 
-	reg_flat = Flatten()(reg_pool3)
-	fc1 = Dense(256, activation='relu')(reg_flat)
-    	fc2 = Dense(64, activation='relu')(fc1)
-	fc3 = Dense(16, activation='relu')(fc2)
-	fc4 = Dense(2, activation='relu')(fc3)
-	regress = Model(input = [input_img, decoded], output =  fc4, name = "Output_layer")
-	return regress
+  reg_conv3_1 = Conv2D(128, (3, 3), activation='relu', padding='same', name = "block3_conv1")(reg_pool2)
+  reg_conv3_1 = BatchNormalization()(reg_conv3_1)
+  reg_conv3_2 = Conv2D(128, (3, 3), activation='relu', padding='same', name = "block3_conv2")(reg_conv3_1)
+  reg_conv3_2 = BatchNormalization()(reg_conv3_2)
+  reg_pool3 = MaxPooling2D(pool_size=(2, 2),strides=(2,2), padding='same', name = "block3_pool1")(reg_conv3_2)
+
+  reg_flat = Flatten()(reg_pool3)
+  fc1 = Dense(256, activation='relu')(reg_flat)
+  fc2 = Dense(64, activation='relu')(fc1)
+  fc3 = Dense(16, activation='relu')(fc2)
+  fc4 = Dense(2, activation='relu')(fc3)
+  regress = Model(inputs = [input_img, decoded], outputs =  fc4, name = "Output_layer")
+  return regress
 
 
 #########################################################################################################
@@ -334,49 +338,49 @@ def Regressor(input_img, decoded):
 #Encoder
 input_img = Input(shape = (y_shape, x_shape,channels))
 encoded = Encoder(input_img)
-encoded.load_weights(os.path.join(model_weights,'encoded.h5'))
-encoded.trainable = False
+# encoded.load_weights(os.path.join(model_weights,'encoded.h5')) #testing
+# encoded.trainable = False #testing
 
 #Decoder
-HG_ = Input(shape = (y_shape/(2**3),x_shape/(2**3),128))
+HG_ = Input(shape = (y_shape//(2**3),x_shape//(2**3),128))
 conv1_l = Input(shape = (y_shape,x_shape,16))
-conv2_l = Input(shape = (y_shape/(2**1),x_shape/(2**1),64))
-conv3_l = Input(shape = (y_shape/(2**2),x_shape/(2**2),128))
+conv2_l = Input(shape = (y_shape//(2**1),x_shape//(2**1),64))
+conv3_l = Input(shape = (y_shape//(2**2),x_shape//(2**2),128))
 decoded = Decoder( [HG_, conv1_l, conv2_l, conv3_l])
-decoded.load_weights(os.path.join(model_weights,'decoded.h5'))
-decoded.trainable = False
+# decoded.load_weights(os.path.join(model_weights,'decoded.h5')) #testing
+# decoded.trainable = False #testing
 
 # #BottleNeck
-# Neck_input = Input(shape = (y_shape/(2**3), x_shape/(2**3),128))
+# Neck_input = Input(shape = (y_shape//(2**3), x_shape//(2**3),128))
 # neck = neck(Neck_input)
 # # neck.load_weights('UNet.h5', by_name = True)
 # neck.trainable = True
 
 #Hourglass_1
-HG_input = Input(shape = (y_shape/ (2**3), x_shape/(2**3) ,128)) 
-Hg_1 = Hourglass(HG_input)
+HG_input = Input(shape = (y_shape// (2**3), x_shape//(2**3) ,128)) 
+Hg_1 = Hourglass(HG_input) 
 Hg_2 = Hourglass(HG_input)
 Hg_3 = Hourglass(HG_input)
 
-Hg_1.trainable = False
-Hg_2.trainable = False
-Hg_3.trainable = False
+# Hg_1.trainable = False #testing
+# Hg_2.trainable = False #testing
+# Hg_3.trainable = False #testing
 # Hg_1.load_weights(os.path.join(model_weights,"Hg_1.h5"), by_name = True)
-Hg_1.load_weights(os.path.join(model_weights,"Hg_1.h5"))
-Hg_2.load_weights(os.path.join(model_weights,"Hg_2.h5"))
-Hg_3.load_weights(os.path.join(model_weights,"Hg_3.h5"))
+# Hg_1.load_weights(os.path.join(model_weights,"Hg_1.h5")) #testing
+# Hg_2.load_weights(os.path.join(model_weights,"Hg_2.h5")) #testing
+# Hg_3.load_weights(os.path.join(model_weights,"Hg_3.h5")) #testing
 
 ae_output=decoded([Hg_3(Hg_2(Hg_1(encoded(input_img)[0]))), encoded(input_img)[1], encoded(input_img)[2], encoded(input_img)[3]])
 
 # Regressor
 mask_ae = Input(shape = (y_shape, x_shape,channels))
 reg = Regressor(input_img, mask_ae)
-reg.load_weights(os.path.join(model_weights,'Regressor.h5'))
-reg.trainable = False
+# reg.load_weights(os.path.join(model_weights,'Regressor.h5')) #testing
+# reg.trainable = False #testing
 
 #Combined
 output_img = reg([input_img, ae_output])
-model= Model(input = input_img, output = [output_img,ae_output])
+model= Model(inputs = input_img, outputs = [output_img,ae_output])
 
 # if os.path.exists(os.path.join(model_weights,'Finger_AE_Hourglass_Regressor.h5')):
 # 	model.load_weights(os.path.join(model_weights,'Finger_AE_Hourglass_Regressor.h5'), by_name = True)
@@ -405,7 +409,7 @@ if args.phase == 'train':
 	numEpochs = args.epochs
 	batch_size = args.batch_size
 	num_batches = int(len(X_train)/batch_size)
-	print "Number of batches: %d\n" % num_batches
+	print("Number of batches: %d\n" % num_batches)
 	loss=[]
 	val_loss=[]
 	acc=[]
@@ -419,7 +423,7 @@ if args.phase == 'train':
 		model.save_weights(saveModel)
 
 		epoch=epoch+1
-		print "EPOCH NO. : "+str(epoch)+"\n"
+		print("EPOCH NO. : "+str(epoch)+"\n")
 		loss.append(float(history.history['loss'][0]))
 		val_loss.append(float(history.history['val_loss'][0]))
 		loss_arr=np.asarray(loss)
@@ -458,6 +462,9 @@ if args.phase == 'train':
 
 		name = filename.split('.')[0]
 		gtfile = os.path.join(gtPath,name+"_gt.txt")
+		if not os.path.exists(gtfile):
+			print('#################################---file missing:', gtfile)
+			continue
 		f = open(gtfile, 'r')
 		y, x = map(float, f.readline().split())
 		x = (x*x_shape)/original_shape2
